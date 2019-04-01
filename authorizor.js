@@ -15,28 +15,35 @@ function validateTokenAndRespond(event, callback) {
   if (secretKeyArray.length == 2) {
     var secretKey = secretKeyArray[1].trim();
 
-    var dynamoDBParams = {
-      TableName: 'MySecretLatest',
-      Key: {
-        'secretKey': { S: secretKey }
-      },
-      ProjectionExpression: 'secretKey'
-    };
+    let decodedData = Buffer.from(secretKey, 'base64').toString('ascii'); // output string in ascii character encoding. utf8 & other encoding can also be used
+    console.log('decodedData:' + decodedData); // output: Hello World
+    if (decodedData.indexOf(":") == -1) {
+      sendResponse(callback, event, 'Deny');
+    }
+    else {
+      var decodedDataArray = decodedData.split(":");
+      var dynamoDBParams = {
+        TableName: 'MySecret',
+        Key: {
+          'username': { S: decodedDataArray[0] }
+        },
+        ProjectionExpression: 'password'
+      };
 
-    ddb.getItem(dynamoDBParams, function(err, data) {
-      var effect = 'Deny';
-      if (err) {
-        console.log("Error", err);
-      }
-      else {
-        console.log("Success", data.Item);
-        if (data.Item != undefined) {
-          console.log("Entry found in DB");
-          effect = 'Allow';
+      ddb.getItem(dynamoDBParams, function(err, data) {
+        var effect = 'Deny';
+        if (err) {
+          console.log("Error", err);
         }
-      }
-      sendResponse(callback, event, effect);
-    });
+        else {
+          if (data.Item != undefined && data.Item.password.S == decodedDataArray[1]) {
+            console.log("Success");
+            effect = 'Allow';
+          }
+        }
+        sendResponse(callback, event, effect);
+      });
+    }
   }
   else {
     sendResponse(callback, event, 'Deny');
